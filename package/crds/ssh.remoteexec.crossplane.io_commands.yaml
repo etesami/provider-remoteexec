@@ -4,18 +4,18 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.12.1
-  name: mytypes.sample.template.crossplane.io
+  name: commands.ssh.remoteexec.crossplane.io
 spec:
-  group: sample.template.crossplane.io
+  group: ssh.remoteexec.crossplane.io
   names:
     categories:
     - crossplane
     - managed
-    - template
-    kind: MyType
-    listKind: MyTypeList
-    plural: mytypes
-    singular: mytype
+    - remoteexec
+    kind: Command
+    listKind: CommandList
+    plural: commands
+    singular: command
   scope: Cluster
   versions:
   - additionalPrinterColumns:
@@ -34,7 +34,7 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: A MyType is an example API type.
+        description: A Command is an example API type.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -49,7 +49,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: A MyTypeSpec defines the desired state of a MyType.
+            description: A CommandSpec defines the desired state of a Command.
             properties:
               deletionPolicy:
                 default: Delete
@@ -65,12 +65,12 @@ spec:
                 - Delete
                 type: string
               forProvider:
-                description: MyTypeParameters are the configurable fields of a MyType.
+                description: CommandParameters are the configurable fields of a Command.
                 properties:
-                  configurableField:
+                  command:
                     type: string
                 required:
-                - configurableField
+                - command
                 type: object
               managementPolicies:
                 default:
@@ -270,17 +270,15 @@ spec:
             - forProvider
             type: object
           status:
-            description: A MyTypeStatus represents the observed state of a MyType.
+            description: A CommandStatus represents the observed state of a Command.
             properties:
               atProvider:
-                description: MyTypeObservation are the observable fields of a MyType.
+                description: CommandObservation are the observable fields of a Command.
                 properties:
-                  configurableField:
+                  output:
                     type: string
-                  observableField:
+                  statusCode:
                     type: string
-                required:
-                - configurableField
                 type: object
               conditions:
                 description: Conditions of the resource.

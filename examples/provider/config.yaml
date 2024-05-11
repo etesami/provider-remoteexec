@@ -12,7 +12,7 @@ stringData:
       "user_name"": "ubuntu",
     }
 ---
-apiVersion: template.crossplane.io/v1alpha1
+apiVersion: remoteexec.crossplane.io/v1alpha1
 kind: ProviderConfig
 metadata:
   name: example

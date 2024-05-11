@@ -1,0 +1,9 @@
+apiVersion: ssh.remoteexec.crossplane.io/v1alpha1
+kind: Command
+metadata:
+  name: example
+spec:
+  forProvider:
+    command: test
+  providerConfigRef:
+    name: example

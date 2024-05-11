@@ -4,14 +4,14 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.12.1
-  name: providerconfigusages.template.crossplane.io
+  name: providerconfigusages.remoteexec.crossplane.io
 spec:
-  group: template.crossplane.io
+  group: remoteexec.crossplane.io
   names:
     categories:
     - crossplane
     - provider
-    - template
+    - remoteexec
     kind: ProviderConfigUsage
     listKind: ProviderConfigUsageList
     plural: providerconfigusages
