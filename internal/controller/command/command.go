@@ -34,7 +34,9 @@ import (
 
 	"github.com/crossplane/provider-remoteexec/apis/ssh/v1alpha1"
 	apisv1alpha1 "github.com/crossplane/provider-remoteexec/apis/v1alpha1"
+	v1alpha1ssh "github.com/crossplane/provider-remoteexec/internal/client/ssh"
 	"github.com/crossplane/provider-remoteexec/internal/features"
+	"golang.org/x/crypto/ssh"
 )
 
 const (
@@ -67,7 +69,8 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 		managed.WithExternalConnecter(&connector{
 			kube:         mgr.GetClient(),
 			usage:        resource.NewProviderConfigUsageTracker(mgr.GetClient(), &apisv1alpha1.ProviderConfigUsage{}),
-			newServiceFn: newNoOpService}),
+			newServiceFn: v1alpha1ssh.NewSSHClient}),
+		// newServiceFn: newNoOpService}),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),
 		managed.WithPollInterval(o.PollInterval),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
@@ -86,7 +89,7 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 type connector struct {
 	kube         client.Client
 	usage        resource.Tracker
-	newServiceFn func(creds []byte) (interface{}, error)
+	newServiceFn func(ctx context.Context, creds []byte) (*ssh.Client, error)
 }
 
 // Connect typically produces an ExternalClient by:
@@ -95,6 +98,8 @@ type connector struct {
 // 3. Getting the credentials specified by the ProviderConfig.
 // 4. Using the credentials to form a client.
 func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.ExternalClient, error) {
+	logger := log.FromContext(ctx).WithName("[CONNECT]")
+	logger.Info("connecting...")
 	cr, ok := mg.(*v1alpha1.Command)
 	if !ok {
 		return nil, errors.New(errNotCommand)
@@ -115,7 +120,16 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 		return nil, errors.Wrap(err, errGetCreds)
 	}
 
-	svc, err := c.newServiceFn(data)
+	// // func ExtractSecret(ctx context.Context, client client.Client, s xpv1.CommonCredentialSelectors) ([]byte, error) {
+	// sc, err := resource.ExtractSecret(ctx, c.kube, cd.CommonCredentialSelectors)
+	// if err != nil {
+	// 	logger.Error(err, "Error extracting secret")
+	// 	return nil, errors.Wrap(err, errGetCreds)
+	// }
+
+	// logger.Info("Credentials", "secret:", sc)
+
+	svc, err := c.newServiceFn(ctx, data)
 	if err != nil {
 		return nil, errors.Wrap(err, errNewClient)
 	}

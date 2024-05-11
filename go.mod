@@ -8,6 +8,7 @@ require (
 	github.com/google/go-cmp v0.5.9
 	github.com/pkg/errors v0.9.1
 	go.uber.org/zap v1.24.0
+	golang.org/x/crypto v0.11.0
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6
 	k8s.io/apimachinery v0.27.4
 	k8s.io/client-go v0.27.4
