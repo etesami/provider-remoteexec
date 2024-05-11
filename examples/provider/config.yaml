@@ -4,8 +4,13 @@ metadata:
   namespace: crossplane-system
   name: example-provider-secret
 type: Opaque
-data:
-  # credentials: BASE64ENCODED_PROVIDER_CREDS
+stringData:
+  configs: |
+    {
+      "private_key": "sampleprivatekeyencocedvalue",
+      "remote_host": "10.30.20.28:22",
+      "user_name"": "ubuntu",
+    }
 ---
 apiVersion: template.crossplane.io/v1alpha1
 kind: ProviderConfig
@@ -17,4 +22,4 @@ spec:
     secretRef:
       namespace: crossplane-system
       name: example-provider-secret
-      key: credentials
+      key: configs

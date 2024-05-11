@@ -18,12 +18,12 @@ package mytype
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/crossplane/crossplane-runtime/pkg/connection"
 	"github.com/crossplane/crossplane-runtime/pkg/controller"
@@ -101,6 +101,8 @@ type connector struct {
 // 3. Getting the credentials specified by the ProviderConfig.
 // 4. Using the credentials to form a client.
 func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.ExternalClient, error) {
+	logger := log.FromContext(ctx).WithName("[CONNECT]")
+	logger.Info("connecting")
 	cr, ok := mg.(*v1alpha1.MyType)
 	if !ok {
 		return nil, errors.New(errNotMyType)
@@ -138,13 +140,15 @@ type external struct {
 }
 
 func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.ExternalObservation, error) {
+	logger := log.FromContext(ctx).WithName("[CONNECT]")
+	logger.Info("connecting")
 	cr, ok := mg.(*v1alpha1.MyType)
 	if !ok {
 		return managed.ExternalObservation{}, errors.New(errNotMyType)
 	}
 
 	// These fmt statements should be removed in the real implementation.
-	fmt.Printf("Observing: %+v", cr)
+	logger.Info("Observing: %+v", cr)
 
 	return managed.ExternalObservation{
 		// Return false when the external resource does not exist. This lets
@@ -164,12 +168,14 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 }
 
 func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.ExternalCreation, error) {
+	logger := log.FromContext(ctx).WithName("[CREATE]")
+	logger.Info("creating")
 	cr, ok := mg.(*v1alpha1.MyType)
 	if !ok {
 		return managed.ExternalCreation{}, errors.New(errNotMyType)
 	}
 
-	fmt.Printf("Creating: %+v", cr)
+	logger.Info("Creating: %+v", cr)
 
 	return managed.ExternalCreation{
 		// Optionally return any details that may be required to connect to the
@@ -179,12 +185,14 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 }
 
 func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.ExternalUpdate, error) {
+	logger := log.FromContext(ctx).WithName("[UPDATE]")
+	logger.Info("updating")
 	cr, ok := mg.(*v1alpha1.MyType)
 	if !ok {
 		return managed.ExternalUpdate{}, errors.New(errNotMyType)
 	}
 
-	fmt.Printf("Updating: %+v", cr)
+	logger.Info("Updating: %+v", cr)
 
 	return managed.ExternalUpdate{
 		// Optionally return any details that may be required to connect to the
@@ -194,12 +202,14 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 }
 
 func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
+	logger := log.FromContext(ctx).WithName("[DELETE]")
+	logger.Info("deleting")
 	cr, ok := mg.(*v1alpha1.MyType)
 	if !ok {
 		return errors.New(errNotMyType)
 	}
 
-	fmt.Printf("Deleting: %+v", cr)
+	logger.Info("Deleting: %+v", cr)
 
 	return nil
 }

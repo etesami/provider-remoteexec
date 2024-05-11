@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"go.uber.org/zap/zapcore"
 	"gopkg.in/alecthomas/kingpin.v2"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -42,6 +43,13 @@ import (
 	"github.com/crossplane/provider-template/internal/features"
 )
 
+func customLoggerFormat() zap.EncoderConfigOption {
+	return func(encoderConfig *zapcore.EncoderConfig) {
+		encoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
+		encoderConfig.EncodeTime = zapcore.TimeEncoderOfLayout("2006-01-02T15:04:05Z")
+	}
+}
+
 func main() {
 	var (
 		app            = kingpin.New(filepath.Base(os.Args[0]), "Template support for Crossplane.").DefaultEnvars()
@@ -57,8 +65,22 @@ func main() {
 		enableManagementPolicies   = app.Flag("enable-management-policies", "Enable support for Management Policies.").Default("false").Envar("ENABLE_MANAGEMENT_POLICIES").Bool()
 	)
 	kingpin.MustParse(app.Parse(os.Args[1:]))
+	file, err := os.Create("/var/log/skycluster/remoteexec.log")
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
 
-	zl := zap.New(zap.UseDevMode(*debug))
+	opts := zap.Options{
+		Development: true,
+		EncoderConfigOptions: []zap.EncoderConfigOption{
+			customLoggerFormat(),
+		},
+		DestWriter: file,
+	}
+
+	zl := zap.New(zap.UseFlagOptions(&opts))
+	// zl := zap.New(zap.UseDevMode(*debug))
 	log := logging.NewLogrLogger(zl.WithName("provider-template"))
 	if *debug {
 		// The controller-runtime runs with a no-op logger by default. It is
