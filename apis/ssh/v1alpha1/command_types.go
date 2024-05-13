@@ -27,13 +27,14 @@ import (
 
 // CommandParameters are the configurable fields of a Command.
 type CommandParameters struct {
-	Command string `json:"command"`
+	Script      string `json:"script"`
+	SudoEnabled bool   `json:"sudoEnabled,omitempty"`
 }
 
 // CommandObservation are the observable fields of a Command.
 type CommandObservation struct {
-	Output     string `json:"output,omitempty"`
-	StatusCode string `json:"statusCode,omitempty"`
+	Output     string `json:"output"`
+	StatusCode int    `json:"statusCode"`
 }
 
 // A CommandSpec defines the desired state of a Command.

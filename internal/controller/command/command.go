@@ -19,6 +19,7 @@ package command
 import (
 	"context"
 
+	commonv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -34,7 +35,7 @@ import (
 
 	"github.com/crossplane/provider-remoteexec/apis/ssh/v1alpha1"
 	apisv1alpha1 "github.com/crossplane/provider-remoteexec/apis/v1alpha1"
-	v1alpha1ssh "github.com/crossplane/provider-remoteexec/internal/client/ssh"
+	sshv1alpha1 "github.com/crossplane/provider-remoteexec/internal/client/ssh"
 	"github.com/crossplane/provider-remoteexec/internal/features"
 	"golang.org/x/crypto/ssh"
 )
@@ -63,18 +64,17 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 	if o.Features.Enabled(features.EnableAlphaExternalSecretStores) {
 		cps = append(cps, connection.NewDetailsManager(mgr.GetClient(), apisv1alpha1.StoreConfigGroupVersionKind))
 	}
-
 	r := managed.NewReconciler(mgr,
 		resource.ManagedKind(v1alpha1.CommandGroupVersionKind),
 		managed.WithExternalConnecter(&connector{
 			kube:         mgr.GetClient(),
 			usage:        resource.NewProviderConfigUsageTracker(mgr.GetClient(), &apisv1alpha1.ProviderConfigUsage{}),
-			newServiceFn: v1alpha1ssh.NewSSHClient}),
-		// newServiceFn: newNoOpService}),
+			newServiceFn: sshv1alpha1.NewSSHClient}),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),
 		managed.WithPollInterval(o.PollInterval),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
-		managed.WithConnectionPublishers(cps...))
+		managed.WithConnectionPublishers(cps...),
+		managed.WithManagementPolicies())
 
 	return ctrl.NewControllerManagedBy(mgr).
 		Named(name).
@@ -99,7 +99,7 @@ type connector struct {
 // 4. Using the credentials to form a client.
 func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.ExternalClient, error) {
 	logger := log.FromContext(ctx).WithName("[CONNECT]")
-	logger.Info("connecting...")
+	logger.Info("Connecting...")
 	cr, ok := mg.(*v1alpha1.Command)
 	if !ok {
 		return nil, errors.New(errNotCommand)
@@ -120,15 +120,6 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 		return nil, errors.Wrap(err, errGetCreds)
 	}
 
-	// // func ExtractSecret(ctx context.Context, client client.Client, s xpv1.CommonCredentialSelectors) ([]byte, error) {
-	// sc, err := resource.ExtractSecret(ctx, c.kube, cd.CommonCredentialSelectors)
-	// if err != nil {
-	// 	logger.Error(err, "Error extracting secret")
-	// 	return nil, errors.Wrap(err, errGetCreds)
-	// }
-
-	// logger.Info("Credentials", "secret:", sc)
-
 	svc, err := c.newServiceFn(ctx, data)
 	if err != nil {
 		return nil, errors.Wrap(err, errNewClient)
@@ -147,41 +138,48 @@ type external struct {
 
 func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.ExternalObservation, error) {
 	logger := log.FromContext(ctx).WithName("[OBSERVE]")
-	logger.Info("observing...")
 	cr, ok := mg.(*v1alpha1.Command)
 	if !ok {
 		return managed.ExternalObservation{}, errors.New(errNotCommand)
 	}
 
-	// These fmt statements should be removed in the real implementation.
-	logger.Info("OBSERVE", "Observing: %+v", cr)
+	// anything else than delete, we just update (run the script) again
+	msg, err := sshv1alpha1.RunScript(
+		ctx, c.service.(*ssh.Client), cr.Spec.ForProvider.Script, cr.Spec.ForProvider.SudoEnabled)
+
+	if err != nil {
+		// when there is an error in running script, we just reflect results in status
+		// and set conditions accordingly and wait for trigger to be set to true
+		// there is nothing for the external resource to be created or updated
+		logger.Error(err, "Unable to run the script")
+		cr.Status.AtProvider.Output = msg
+		cr.Status.AtProvider.StatusCode = err.(*ssh.ExitError).ExitStatus()
+		cr.SetConditions(commonv1.Unavailable())
+		return managed.ExternalObservation{
+			// setting ResourceExists to true, so that create event is not triggered
+			// setting ResourceUpToDate to true, so that update event is not triggered
+			ResourceExists:   true,
+			ResourceUpToDate: true,
+		}, nil
+	}
+
+	cr.Status.AtProvider.StatusCode = 0
+	cr.Status.AtProvider.Output = msg
+	cr.SetConditions(commonv1.Available())
 
 	return managed.ExternalObservation{
-		// Return false when the external resource does not exist. This lets
-		// the managed resource reconciler know that it needs to call Create to
-		// (re)create the resource, or that it has successfully been deleted.
-		ResourceExists: true,
-
-		// Return false when the external resource exists, but it not up to date
-		// with the desired managed resource state. This lets the managed
-		// resource reconciler know that it needs to call Update.
+		ResourceExists:   true,
 		ResourceUpToDate: true,
-
-		// Return any details that may be required to connect to the external
-		// resource. These will be stored as the connection secret.
-		ConnectionDetails: managed.ConnectionDetails{},
 	}, nil
 }
 
 func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.ExternalCreation, error) {
 	logger := log.FromContext(ctx).WithName("[CREATE]")
-	logger.Info("creating...")
-	cr, ok := mg.(*v1alpha1.Command)
+	logger.Info("Creating...")
+	_, ok := mg.(*v1alpha1.Command)
 	if !ok {
 		return managed.ExternalCreation{}, errors.New(errNotCommand)
 	}
-
-	logger.Info("CREATE", "Creating: %+v", cr)
 
 	return managed.ExternalCreation{
 		// Optionally return any details that may be required to connect to the
@@ -192,13 +190,11 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 
 func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.ExternalUpdate, error) {
 	logger := log.FromContext(ctx).WithName("[UPDATE]")
-	logger.Info("updating...")
-	cr, ok := mg.(*v1alpha1.Command)
+	logger.Info("Updating...")
+	_, ok := mg.(*v1alpha1.Command)
 	if !ok {
 		return managed.ExternalUpdate{}, errors.New(errNotCommand)
 	}
-
-	logger.Info("UPDATE", "Updating: %+v", cr)
 
 	return managed.ExternalUpdate{
 		// Optionally return any details that may be required to connect to the
@@ -209,13 +205,11 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 
 func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
 	logger := log.FromContext(ctx).WithName("[DELETE]")
-	logger.Info("deleting...")
-	cr, ok := mg.(*v1alpha1.Command)
+	logger.Info("Deleting...")
+	_, ok := mg.(*v1alpha1.Command)
 	if !ok {
 		return errors.New(errNotCommand)
 	}
-
-	logger.Info("DELETE", "Deleting: %+v", cr)
 
 	return nil
 }

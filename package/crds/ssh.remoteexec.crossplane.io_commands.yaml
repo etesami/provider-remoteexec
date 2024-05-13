@@ -67,10 +67,12 @@ spec:
               forProvider:
                 description: CommandParameters are the configurable fields of a Command.
                 properties:
-                  command:
+                  script:
                     type: string
+                  sudoEnabled:
+                    type: boolean
                 required:
-                - command
+                - script
                 type: object
               managementPolicies:
                 default:
@@ -278,7 +280,10 @@ spec:
                   output:
                     type: string
                   statusCode:
-                    type: string
+                    type: integer
+                required:
+                - output
+                - statusCode
                 type: object
               conditions:
                 description: Conditions of the resource.
