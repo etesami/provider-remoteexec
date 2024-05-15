@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -69,7 +70,13 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	defer file.Close()
+	// defer file.Close()
+	// Defer closing the file
+	defer func() {
+		if cerr := file.Close(); cerr != nil {
+			fmt.Println("Error closing file:", cerr)
+		}
+	}()
 
 	opts := zap.Options{
 		Development: true,

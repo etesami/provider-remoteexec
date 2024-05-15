@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -14,8 +15,8 @@ import (
 
 const (
 	// default Secret field names for TLS certificates, like managed by cert-manager
-	defaultClientCertificateKeyField  = "tls.key"
-	defaultClientCertificateCertField = "tls.crt"
+	// defaultClientCertificateKeyField  = "tls.key"
+	// defaultClientCertificateCertField = "tls.crt"
 
 	errCannotParse                    = "cannot parse credentials"
 	errMissingClientCertSecretRefKeys = "missing client cert ref secret name or namespace"
@@ -166,11 +167,15 @@ func RunScript(ctx context.Context, client *ssh.Client, script string, sudoEnabl
 		logger.Error(err, "Failed to create session")
 		return "", err
 	}
-	defer session.Close()
+	defer func() {
+		if cerr := session.Close(); cerr != nil {
+			logger.Error(err, "Error closing file:")
+		}
+	}()
 	output, err := session.CombinedOutput(cmd)
 	if err != nil {
 		logger.Error(err, "Failed to run script")
-		return string(output), nil
+		return string(output), err
 	}
 
 	// Clean up the temporary file
@@ -188,7 +193,12 @@ func createTempFile(client *ssh.Client) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer session.Close()
+	defer func() {
+		if cerr := session.Close(); cerr != nil {
+			// Handle the error appropriately, e.g., log it or return it
+			fmt.Println("Error closing session:", cerr)
+		}
+	}()
 
 	tmpFile, err := session.CombinedOutput("mktemp")
 	if err != nil {
@@ -202,7 +212,12 @@ func writeScriptToFile(client *ssh.Client, tmpFile, scriptContent string) error 
 	if err != nil {
 		return err
 	}
-	defer session.Close()
+	defer func() {
+		if cerr := session.Close(); cerr != nil {
+			// Handle the error appropriately, e.g., log it or return it
+			fmt.Println("Error closing session:", cerr)
+		}
+	}()
 
 	cmd := "cat > " + tmpFile + " << EOF\n" + scriptContent + "\nEOF"
 	return session.Run(cmd)
@@ -213,7 +228,12 @@ func cleanUpTempFile(client *ssh.Client, tmpFile string) error {
 	if err != nil {
 		return err
 	}
-	defer session.Close()
+	defer func() {
+		if cerr := session.Close(); cerr != nil {
+			// Handle the error appropriately, e.g., log it or return it
+			fmt.Println("Error closing session:", cerr)
+		}
+	}()
 
 	cmd := "rm -f " + tmpFile
 	return session.Run(cmd)

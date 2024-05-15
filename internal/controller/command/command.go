@@ -28,7 +28,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	commonv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/connection"
 	"github.com/crossplane/crossplane-runtime/pkg/controller"
@@ -50,13 +49,6 @@ const (
 	errGetCreds     = "cannot get credentials"
 
 	errNewClient = "cannot create new Service"
-)
-
-// A NoOpService does nothing.
-type NoOpService struct{}
-
-var (
-	newNoOpService = func(_ []byte) (interface{}, error) { return &NoOpService{}, nil }
 )
 
 // Setup adds a controller that reconciles Command managed resources.
@@ -157,8 +149,13 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		// there is nothing for the external resource to be created or updated
 		logger.Error(err, "Unable to run the script")
 		cr.Status.AtProvider.Output = msg
-		cr.Status.AtProvider.StatusCode = err.(*ssh.ExitError).ExitStatus()
-		cr.SetConditions(commonv1.Unavailable())
+		var exitErr *ssh.ExitError
+		if errors.As(err, &exitErr) {
+			cr.Status.AtProvider.StatusCode = exitErr.ExitStatus()
+		} else {
+			cr.Status.AtProvider.StatusCode = 1
+		}
+		cr.SetConditions(xpv1.Unavailable())
 		return managed.ExternalObservation{
 			// setting ResourceExists to true, so that create event is not triggered
 			// setting ResourceUpToDate to true, so that update event is not triggered
@@ -169,7 +166,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 	cr.Status.AtProvider.StatusCode = 0
 	cr.Status.AtProvider.Output = msg
-	cr.SetConditions(commonv1.Available())
+	cr.SetConditions(xpv1.Available())
 
 	return managed.ExternalObservation{
 		ResourceExists:   true,

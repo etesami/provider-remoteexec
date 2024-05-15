@@ -1,0 +1,15 @@
+apiVersion: ssh.remoteexec.crossplane.io/v1alpha1
+kind: Command
+metadata:
+  name: headscale-auth
+  annotations:
+    skycluster: skyclustername
+spec:
+  forProvider:
+    script: |
+      cat /var/lib/headscale/env_auth.txt
+    sudoEnabled: true
+  managementPolicies: 
+    - "Observe"
+  providerConfigRef:
+    name: example
