@@ -19,13 +19,17 @@ package command
 import (
 	"context"
 
-	commonv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/pkg/errors"
+	"golang.org/x/crypto/ssh"
+
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	commonv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/connection"
 	"github.com/crossplane/crossplane-runtime/pkg/controller"
 	"github.com/crossplane/crossplane-runtime/pkg/event"
@@ -37,7 +41,6 @@ import (
 	apisv1alpha1 "github.com/crossplane/provider-remoteexec/apis/v1alpha1"
 	sshv1alpha1 "github.com/crossplane/provider-remoteexec/internal/client/ssh"
 	"github.com/crossplane/provider-remoteexec/internal/features"
-	"golang.org/x/crypto/ssh"
 )
 
 const (
@@ -69,7 +72,7 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 		managed.WithExternalConnecter(&connector{
 			kube:         mgr.GetClient(),
 			usage:        resource.NewProviderConfigUsageTracker(mgr.GetClient(), &apisv1alpha1.ProviderConfigUsage{}),
-			newServiceFn: sshv1alpha1.NewSSHClient}),
+			newServiceFn: sshv1alpha1.NewSSHClientwithMap}),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),
 		managed.WithPollInterval(o.PollInterval),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
@@ -89,7 +92,7 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 type connector struct {
 	kube         client.Client
 	usage        resource.Tracker
-	newServiceFn func(ctx context.Context, creds []byte) (*ssh.Client, error)
+	newServiceFn func(ctx context.Context, creds map[string][]byte) (*ssh.Client, error)
 }
 
 // Connect typically produces an ExternalClient by:
@@ -115,7 +118,8 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 	}
 
 	cd := pc.Spec.Credentials
-	data, err := resource.CommonCredentialExtractor(ctx, cd.Source, c.kube, cd.CommonCredentialSelectors)
+	// data, err := resource.CommonCredentialExtractor(ctx, cd.Source, c.kube, cd.CommonCredentialSelectors)
+	data, err := ExtractSecret(ctx, c.kube, cd.CommonCredentialSelectors)
 	if err != nil {
 		return nil, errors.Wrap(err, errGetCreds)
 	}
@@ -212,4 +216,16 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
 	}
 
 	return nil
+}
+
+// ExtractSecret extracts credentials from a Kubernetes secret with any keys.
+func ExtractSecret(ctx context.Context, client client.Client, s xpv1.CommonCredentialSelectors) (map[string][]byte, error) {
+	if s.SecretRef == nil {
+		return nil, errors.New("cannot extract from secret key when none specified")
+	}
+	secret := &corev1.Secret{}
+	if err := client.Get(ctx, types.NamespacedName{Namespace: s.SecretRef.Namespace, Name: s.SecretRef.Name}, secret); err != nil {
+		return nil, errors.Wrap(err, "cannot get credentials secret")
+	}
+	return secret.Data, nil
 }

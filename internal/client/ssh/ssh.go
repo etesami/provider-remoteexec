@@ -23,7 +23,7 @@ const (
 )
 
 // NewSSHClient creates a new SSHClient with supplied credentials
-func NewSSHClient(ctx context.Context, data []byte) (*ssh.Client, error) { // nolint: gocyclo
+func NewSSHClientwithKey(ctx context.Context, data []byte) (*ssh.Client, error) { // nolint: gocyclo
 	logger := log.FromContext(ctx).WithName("[SSHClient]")
 	kc := Config{}
 
@@ -60,6 +60,71 @@ func NewSSHClient(ctx context.Context, data []byte) (*ssh.Client, error) { // no
 	}
 
 	client, err := ssh.Dial("tcp", remoteHost, config) // Replace with your remote server address and port
+	if err != nil {
+		logger.Error(err, "Failed to dial")
+	}
+
+	return client, nil
+}
+
+func NewSSHClientwithMap(ctx context.Context, data map[string][]byte) (*ssh.Client, error) { // nolint: gocyclo
+	logger := log.FromContext(ctx).WithName("[SSHClient]")
+	kc := Config{}
+
+	// if err := json.Unmarshal(data, &kc); err != nil {
+	// 	return nil, errors.Wrap(err, errCannotParse)
+	// }
+
+	// check if keys exist in the data and assign to the struct
+	if _, ok := data["username"]; !ok {
+		return nil, errors.New("username key not found in the data")
+	}
+	if _, ok := data["remote_host_ip"]; !ok {
+		return nil, errors.New("remote_host_ip key not found in the data")
+	}
+	if _, ok := data["remote_host_port"]; !ok {
+		return nil, errors.New("remote_host_port key not found in the data")
+	}
+	// should set at least private_key or password keys
+	if _, ok := data["private_key"]; !ok {
+		if _, ok := data["password"]; !ok {
+			return nil, errors.New("private_key or password key not found in the data")
+		}
+		kc.Password = string(data["password"])
+	} else {
+		kc.PrivateKey = string(data["private_key"])
+	}
+
+	kc.Username = string(data["username"])
+	kc.Host = string(data["remote_host_ip"]) + ":" + string(data["remote_host_port"])
+
+	config := &ssh.ClientConfig{}
+	config.User = kc.Username
+
+	if kc.PrivateKey != "" {
+
+		privateKeyBytes, err := base64.StdEncoding.DecodeString(kc.PrivateKey)
+		if err != nil {
+			logger.Error(err, "Error decoding base64 private key")
+		}
+
+		signer, err := ssh.ParsePrivateKey(privateKeyBytes)
+		if err != nil {
+			logger.Error(err, "Failed to parse private key")
+		}
+
+		config.Auth = []ssh.AuthMethod{
+			ssh.PublicKeys(signer),
+		}
+		config.HostKeyCallback = ssh.InsecureIgnoreHostKey()
+	} else {
+		config.Auth = []ssh.AuthMethod{
+			ssh.Password(kc.Password), // Replace with your remote server password
+		}
+		config.HostKeyCallback = ssh.InsecureIgnoreHostKey()
+	}
+
+	client, err := ssh.Dial("tcp", kc.Host, config) // Replace with your remote server address and port
 	if err != nil {
 		logger.Error(err, "Failed to dial")
 	}
