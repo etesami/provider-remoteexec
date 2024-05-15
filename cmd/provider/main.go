@@ -18,12 +18,10 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
-	"go.uber.org/zap/zapcore"
 	"gopkg.in/alecthomas/kingpin.v2"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -44,12 +42,12 @@ import (
 	"github.com/crossplane/provider-remoteexec/internal/features"
 )
 
-func customLoggerFormat() zap.EncoderConfigOption {
-	return func(encoderConfig *zapcore.EncoderConfig) {
-		encoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
-		encoderConfig.EncodeTime = zapcore.TimeEncoderOfLayout("2006-01-02T15:04:05Z")
-	}
-}
+// func customLoggerFormat() zap.EncoderConfigOption {
+// 	return func(encoderConfig *zapcore.EncoderConfig) {
+// 		encoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
+// 		encoderConfig.EncodeTime = zapcore.TimeEncoderOfLayout("2006-01-02T15:04:05Z")
+// 	}
+// }
 
 func main() {
 	var (
@@ -63,31 +61,31 @@ func main() {
 
 		namespace                  = app.Flag("namespace", "Namespace used to set as default scope in default secret store config.").Default("crossplane-system").Envar("POD_NAMESPACE").String()
 		enableExternalSecretStores = app.Flag("enable-external-secret-stores", "Enable support for ExternalSecretStores.").Default("false").Envar("ENABLE_EXTERNAL_SECRET_STORES").Bool()
-		enableManagementPolicies   = app.Flag("enable-management-policies", "Enable support for Management Policies.").Default("false").Envar("ENABLE_MANAGEMENT_POLICIES").Bool()
+		enableManagementPolicies   = app.Flag("enable-management-policies", "Enable support for Management Policies.").Default("true").Envar("ENABLE_MANAGEMENT_POLICIES").Bool()
 	)
 	kingpin.MustParse(app.Parse(os.Args[1:]))
-	file, err := os.Create("/var/log/skycluster/remoteexec.log")
-	if err != nil {
-		panic(err)
-	}
-	// defer file.Close()
-	// Defer closing the file
-	defer func() {
-		if cerr := file.Close(); cerr != nil {
-			fmt.Println("Error closing file:", cerr)
-		}
-	}()
+	// file, err := os.Create("/var/log/skycluster/remoteexec.log")
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// // defer file.Close()
+	// // Defer closing the file
+	// defer func() {
+	// 	if cerr := file.Close(); cerr != nil {
+	// 		fmt.Println("Error closing file:", cerr)
+	// 	}
+	// }()
 
-	opts := zap.Options{
-		Development: true,
-		EncoderConfigOptions: []zap.EncoderConfigOption{
-			customLoggerFormat(),
-		},
-		DestWriter: file,
-	}
+	// opts := zap.Options{
+	// 	Development: true,
+	// 	EncoderConfigOptions: []zap.EncoderConfigOption{
+	// 		customLoggerFormat(),
+	// 	},
+	// 	DestWriter: file,
+	// }
 
-	zl := zap.New(zap.UseFlagOptions(&opts))
-	// zl := zap.New(zap.UseDevMode(*debug))
+	// zl := zap.New(zap.UseFlagOptions(&opts))
+	zl := zap.New(zap.UseDevMode(*debug))
 	log := logging.NewLogrLogger(zl.WithName("provider-remoteexec"))
 	if *debug {
 		// The controller-runtime runs with a no-op logger by default. It is
