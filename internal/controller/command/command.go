@@ -141,7 +141,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 	// anything else than delete, we just update (run the script) again
 	msg, err := sshv1alpha1.RunScript(
-		ctx, c.service.(*ssh.Client), cr.Spec.ForProvider.Script, cr.Spec.ForProvider.SudoEnabled)
+		ctx, c.service.(*ssh.Client), cr.Spec.ForProvider.Script, cr.Spec.ForProvider.Vars, cr.Spec.ForProvider.SudoEnabled)
 
 	if err != nil {
 		// when there is an error in running script, we just reflect results in status

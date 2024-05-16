@@ -25,8 +25,16 @@ import (
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 )
 
+type Var struct {
+	// Name of the variable
+	Name string `json:"name"`
+	// Value of the variable
+	Value string `json:"value"`
+}
+
 // CommandParameters are the configurable fields of a Command.
 type CommandParameters struct {
+	Vars        []Var  `json:"vars,omitempty"`
 	Script      string `json:"script"`
 	SudoEnabled bool   `json:"sudoEnabled,omitempty"`
 }

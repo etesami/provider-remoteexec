@@ -6,6 +6,9 @@ metadata:
     skycluster: skyclustername
 spec:
   forProvider:
+    vars:
+      - name: VPN_SERVER_URL
+        value: "" # TO BE FILLED
     script: |
       cat /var/lib/headscale/env_auth.txt
     sudoEnabled: true

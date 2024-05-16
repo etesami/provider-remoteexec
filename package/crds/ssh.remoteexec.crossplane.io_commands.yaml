@@ -71,6 +71,20 @@ spec:
                     type: string
                   sudoEnabled:
                     type: boolean
+                  vars:
+                    items:
+                      properties:
+                        name:
+                          description: Name of the variable
+                          type: string
+                        value:
+                          description: Value of the variable
+                          type: string
+                      required:
+                      - name
+                      - value
+                      type: object
+                    type: array
                 required:
                 - script
                 type: object

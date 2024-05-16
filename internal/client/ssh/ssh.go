@@ -5,7 +5,9 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strings"
 
+	"github.com/crossplane/provider-remoteexec/apis/ssh/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"golang.org/x/crypto/ssh"
@@ -133,8 +135,18 @@ func NewSSHClientwithMap(ctx context.Context, data map[string][]byte) (*ssh.Clie
 	return client, nil
 }
 
+// ReplaceVars replaces the variables in the script with the given values
+func ReplaceVars(script string, vars []v1alpha1.Var) string {
+	// variables are in the format of {{VAR_NAME}}
+	// we remove the {{ and }} and replace the VAR_NAME with the value
+	for _, v := range vars {
+		script = strings.ReplaceAll(script, "{{"+v.Name+"}}", v.Value)
+	}
+	return script
+}
+
 // RunScript function execute the given script over an ssh session
-func RunScript(ctx context.Context, client *ssh.Client, script string, sudoEnabled bool) (string, error) {
+func RunScript(ctx context.Context, client *ssh.Client, script string, vars []v1alpha1.Var, sudoEnabled bool) (string, error) {
 	logger := log.FromContext(ctx).WithName("[RunScript]")
 
 	// Need to create different session for each command
@@ -145,6 +157,9 @@ func RunScript(ctx context.Context, client *ssh.Client, script string, sudoEnabl
 	}
 	// remove trailing newline
 	tmpFile = tmpFile[:len(tmpFile)-1]
+
+	// replace the variables in the script
+	script = ReplaceVars(script, vars)
 
 	// Write the script content to the temporary file
 	err = writeScriptToFile(client, tmpFile, script)
@@ -167,11 +182,8 @@ func RunScript(ctx context.Context, client *ssh.Client, script string, sudoEnabl
 		logger.Error(err, "Failed to create session")
 		return "", err
 	}
-	defer func() {
-		if cerr := session.Close(); cerr != nil {
-			logger.Error(err, "Error closing file:")
-		}
-	}()
+	defer closeSession(session)
+
 	output, err := session.CombinedOutput(cmd)
 	if err != nil {
 		logger.Error(err, "Failed to run script")
@@ -187,18 +199,20 @@ func RunScript(ctx context.Context, client *ssh.Client, script string, sudoEnabl
 	return string(output), nil
 }
 
+func closeSession(session *ssh.Session) {
+	err := session.Close()
+	if err != nil {
+		_ = fmt.Errorf("failed to close session: %w", err)
+	}
+}
+
 func createTempFile(client *ssh.Client) (string, error) {
 
 	session, err := client.NewSession()
 	if err != nil {
 		return "", err
 	}
-	defer func() {
-		if cerr := session.Close(); cerr != nil {
-			// Handle the error appropriately, e.g., log it or return it
-			fmt.Println("Error closing session:", cerr)
-		}
-	}()
+	defer closeSession(session)
 
 	tmpFile, err := session.CombinedOutput("mktemp")
 	if err != nil {
@@ -212,12 +226,7 @@ func writeScriptToFile(client *ssh.Client, tmpFile, scriptContent string) error 
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if cerr := session.Close(); cerr != nil {
-			// Handle the error appropriately, e.g., log it or return it
-			fmt.Println("Error closing session:", cerr)
-		}
-	}()
+	defer closeSession(session)
 
 	cmd := "cat > " + tmpFile + " << EOF\n" + scriptContent + "\nEOF"
 	return session.Run(cmd)
@@ -228,12 +237,7 @@ func cleanUpTempFile(client *ssh.Client, tmpFile string) error {
 	if err != nil {
 		return err
 	}
-	defer func() {
-		if cerr := session.Close(); cerr != nil {
-			// Handle the error appropriately, e.g., log it or return it
-			fmt.Println("Error closing session:", cerr)
-		}
-	}()
+	defer closeSession(session)
 
 	cmd := "rm -f " + tmpFile
 	return session.Run(cmd)
