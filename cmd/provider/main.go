@@ -63,38 +63,40 @@ func main() {
 
 		namespace                  = app.Flag("namespace", "Namespace used to set as default scope in default secret store config.").Default("crossplane-system").Envar("POD_NAMESPACE").String()
 		enableExternalSecretStores = app.Flag("enable-external-secret-stores", "Enable support for ExternalSecretStores.").Default("false").Envar("ENABLE_EXTERNAL_SECRET_STORES").Bool()
-		enableManagementPolicies   = app.Flag("enable-management-policies", "Enable support for Management Policies.").Default("false").Envar("ENABLE_MANAGEMENT_POLICIES").Bool()
+		enableManagementPolicies   = app.Flag("enable-management-policies", "Enable support for Management Policies.").Default("true").Envar("ENABLE_MANAGEMENT_POLICIES").Bool()
 	)
 	kingpin.MustParse(app.Parse(os.Args[1:]))
-	file, err := os.Create("/var/log/skycluster/remoteexec.log")
-	if err != nil {
-		panic(err)
-	}
-	// defer file.Close()
-	// Defer closing the file
-	defer func() {
-		if cerr := file.Close(); cerr != nil {
-			fmt.Println("Error closing file:", cerr)
-		}
-	}()
 
-	opts := zap.Options{
-		Development: true,
-		EncoderConfigOptions: []zap.EncoderConfigOption{
-			customLoggerFormat(),
-		},
-		DestWriter: file,
-	}
+	zl := zap.New(zap.UseDevMode(*debug))
 
-	zl := zap.New(zap.UseFlagOptions(&opts))
-	// zl := zap.New(zap.UseDevMode(*debug))
-	log := logging.NewLogrLogger(zl.WithName("provider-remoteexec"))
 	if *debug {
+		// custom format logger only for development
+		file, err := os.Create("/var/log/skycluster/remoteexec.log")
+		if err != nil {
+			panic(err)
+		}
+		defer func() {
+			if cerr := file.Close(); cerr != nil {
+				_ = fmt.Errorf("Error closing file: %w", cerr)
+			}
+		}()
+
+		opts := zap.Options{
+			Development: true,
+			EncoderConfigOptions: []zap.EncoderConfigOption{
+				customLoggerFormat(),
+			},
+			DestWriter: file,
+		}
+		zl = zap.New(zap.UseFlagOptions(&opts))
+
 		// The controller-runtime runs with a no-op logger by default. It is
 		// *very* verbose even at info level, so we only provide it a real
 		// logger when we're running in debug mode.
 		ctrl.SetLogger(zl)
 	}
+
+	log := logging.NewLogrLogger(zl.WithName("provider-remoteexec"))
 
 	cfg, err := ctrl.GetConfig()
 	kingpin.FatalIfError(err, "Cannot get API server rest config")
