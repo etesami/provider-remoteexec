@@ -1,8 +1,11 @@
 package ssh
 
 import (
+	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -10,6 +13,7 @@ import (
 	"github.com/crossplane/provider-remoteexec/apis/ssh/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 
 	"github.com/pkg/errors"
@@ -106,11 +110,12 @@ func NewSSHClientwithMap(ctx context.Context, data map[string][]byte) (*ssh.Clie
 
 	if kc.PrivateKey != "" {
 
-		privateKeyBytes, err := base64.StdEncoding.DecodeString(kc.PrivateKey)
-		if err != nil {
-			logger.Error(err, "Error decoding base64 private key")
-		}
+		// privateKeyBytes, err := base64.StdEncoding.DecodeString(kc.PrivateKey)
+		// if err != nil {
+		// 	logger.Error(err, "Error decoding base64 private key")
+		// }
 
+		privateKeyBytes := []byte(kc.PrivateKey)
 		signer, err := ssh.ParsePrivateKey(privateKeyBytes)
 		if err != nil {
 			logger.Error(err, "Failed to parse private key")
@@ -135,6 +140,49 @@ func NewSSHClientwithMap(ctx context.Context, data map[string][]byte) (*ssh.Clie
 	return client, nil
 }
 
+// send a file to the remote host
+func sendFile(client *ssh.Client, fileContent, remotePath string) error {
+	session, err := client.NewSession()
+	if err != nil {
+		return err
+	}
+	defer closeSession(session)
+
+	sftpClient, err := sftp.NewClient(client)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		err := session.Close()
+		if err != nil {
+			_ = fmt.Errorf("failed to close sftp session: %w", err)
+		}
+	}()
+
+	// Convert the string content to a byte buffer
+	fileBuffer := bytes.NewBufferString(fileContent)
+
+	// Open the destination file on the remote host
+	remoteFile, err := sftpClient.Create(remotePath)
+	if err != nil {
+		_ = fmt.Errorf("Failed to create remote file: %s", err)
+	}
+	defer func() {
+		err := remoteFile.Close()
+		if err != nil {
+			_ = fmt.Errorf("failed to close remote file: %w", err)
+		}
+	}()
+
+	// Write the file content to the remote file
+	_, err = fileBuffer.WriteTo(remoteFile)
+	if err != nil {
+		_ = fmt.Errorf("Failed to write to remote file: %s", err)
+	}
+
+	return nil
+}
+
 // ReplaceVars replaces the variables in the script with the given values
 func ReplaceVars(script string, vars []v1alpha1.Var) string {
 	// variables are in the format of {{VAR_NAME}}
@@ -151,31 +199,38 @@ func RunScript(ctx context.Context, client *ssh.Client, script string, vars []v1
 
 	// Need to create different session for each command
 	// Create a temporary file on the remote host
-	tmpFile, err := createTempFile(client)
-	if err != nil {
-		logger.Error(err, "Failed to create temporary file")
-	}
-	// remove trailing newline
-	tmpFile = tmpFile[:len(tmpFile)-1]
+	// tmpFile, err := createTempFile(client)
+	// if err != nil {
+	// 	logger.Error(err, "Failed to create temporary file")
+	// }
+	// // remove trailing newline
+	// tmpFile = tmpFile[:len(tmpFile)-1]
 
 	// replace the variables in the script
 	script = ReplaceVars(script, vars)
 
 	// Write the script content to the temporary file
-	err = writeScriptToFile(client, tmpFile, script)
+	// err = writeScriptToFile(client, tmpFile, script)
+	// if err != nil {
+	// 	logger.Error(err, "Failed to write script content")
+	// }
+
+	// send the script to the remote host
+	remoteFile := "/tmp/" + randomFileName(8)
+	err := sendFile(client, script, remoteFile)
 	if err != nil {
-		logger.Error(err, "Failed to write script content")
+		logger.Error(err, "Failed to send script content")
 	}
 
 	// make the tmpFile executable
-	cmdExec := "chmod +x " + tmpFile
+	cmdExec := "chmod +x " + remoteFile
 
 	// Run the script on the remote host
 	cmd := ""
 	if sudoEnabled {
 		cmd = "sudo "
 	}
-	cmd = cmdExec + " && " + cmd + tmpFile
+	cmd = cmdExec + " && " + cmd + remoteFile
 
 	session, err := client.NewSession()
 	if err != nil {
@@ -191,7 +246,7 @@ func RunScript(ctx context.Context, client *ssh.Client, script string, vars []v1
 	}
 
 	// Clean up the temporary file
-	err = cleanUpTempFile(client, tmpFile)
+	err = cleanUpTempFile(client, remoteFile)
 	if err != nil {
 		logger.Error(err, "Failed to clean up temporary file")
 	}
@@ -241,4 +296,13 @@ func cleanUpTempFile(client *ssh.Client, tmpFile string) error {
 
 	cmd := "rm -f " + tmpFile
 	return session.Run(cmd)
+}
+
+func randomFileName(length int) string {
+	bytes := make([]byte, length)
+	_, err := rand.Read(bytes)
+	if err != nil {
+		panic(err)
+	}
+	return "tmp." + hex.EncodeToString(bytes)
 }
