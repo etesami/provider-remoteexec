@@ -95,33 +95,33 @@ type connector struct {
 func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.ExternalClient, error) {
 	logger := log.FromContext(ctx).WithName("[CONNECT]")
 	logger.Info("Connecting...")
-	// cr, ok := mg.(*v1alpha1.Command)
-	// if !ok {
-	// 	return nil, errors.New(errNotCommand)
-	// }
+	cr, ok := mg.(*v1alpha1.Command)
+	if !ok {
+		return nil, errors.New(errNotCommand)
+	}
 
-	// if err := c.usage.Track(ctx, mg); err != nil {
-	// 	return nil, errors.Wrap(err, errTrackPCUsage)
-	// }
+	if err := c.usage.Track(ctx, mg); err != nil {
+		return nil, errors.Wrap(err, errTrackPCUsage)
+	}
 
-	// pc := &apisv1alpha1.ProviderConfig{}
-	// if err := c.kube.Get(ctx, types.NamespacedName{Name: cr.GetProviderConfigReference().Name}, pc); err != nil {
-	// 	return nil, errors.Wrap(err, errGetPC)
-	// }
+	pc := &apisv1alpha1.ProviderConfig{}
+	if err := c.kube.Get(ctx, types.NamespacedName{Name: cr.GetProviderConfigReference().Name}, pc); err != nil {
+		return nil, errors.Wrap(err, errGetPC)
+	}
 
-	// cd := pc.Spec.Credentials
-	// // data, err := resource.CommonCredentialExtractor(ctx, cd.Source, c.kube, cd.CommonCredentialSelectors)
-	// data, err := ExtractSecret(ctx, c.kube, cd.CommonCredentialSelectors)
-	// if err != nil {
-	// 	return nil, errors.Wrap(err, errGetCreds)
-	// }
+	cd := pc.Spec.Credentials
+	// data, err := resource.CommonCredentialExtractor(ctx, cd.Source, c.kube, cd.CommonCredentialSelectors)
+	data, err := ExtractSecret(ctx, c.kube, cd.CommonCredentialSelectors)
+	if err != nil {
+		return nil, errors.Wrap(err, errGetCreds)
+	}
 
-	// svc, err := c.newServiceFn(ctx, data)
-	// if err != nil {
-	// 	return nil, errors.Wrap(err, errNewClient)
-	// }
+	svc, err := c.newServiceFn(ctx, data)
+	if err != nil {
+		return nil, errors.Wrap(err, errNewClient)
+	}
 
-	return &external{service: nil, connector: c}, nil
+	return &external{service: svc, connector: c}, nil
 }
 
 // An ExternalClient observes, then either creates, updates, or deletes an
@@ -140,34 +140,34 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.New(errNotCommand)
 	}
 
-	logger.Info("Setting Credentials...")
+	// logger.Info("Setting Credentials...")
 
-	// We have to establish connection every time we observe
-	// as the provider config might have changed
-	connector, ok := c.connector.(*connector)
+	// // We have to establish connection every time we observe
+	// // as the provider config might have changed
+	// connector, ok := c.connector.(*connector)
 
-	if err := connector.usage.Track(ctx, mg); err != nil {
-		return managed.ExternalObservation{ResourceUpToDate: false}, errors.Wrap(err, errTrackPCUsage)
-	}
+	// if err := connector.usage.Track(ctx, mg); err != nil {
+	// 	return managed.ExternalObservation{ResourceUpToDate: false}, errors.Wrap(err, errTrackPCUsage)
+	// }
 
-	pc := &apisv1alpha1.ProviderConfig{}
-	if err := connector.kube.Get(ctx, types.NamespacedName{Name: cr.GetProviderConfigReference().Name}, pc); err != nil {
-		return managed.ExternalObservation{ResourceUpToDate: false}, errors.Wrap(err, errGetPC)
-	}
+	// pc := &apisv1alpha1.ProviderConfig{}
+	// if err := connector.kube.Get(ctx, types.NamespacedName{Name: cr.GetProviderConfigReference().Name}, pc); err != nil {
+	// 	return managed.ExternalObservation{ResourceUpToDate: false}, errors.Wrap(err, errGetPC)
+	// }
 
-	cd := pc.Spec.Credentials
-	// data, err := resource.CommonCredentialExtractor(ctx, cd.Source, c.kube, cd.CommonCredentialSelectors)
-	data, err := ExtractSecret(ctx, connector.kube, cd.CommonCredentialSelectors)
-	if err != nil {
-		return managed.ExternalObservation{ResourceUpToDate: false}, errors.Wrap(err, errGetCreds)
-	}
+	// cd := pc.Spec.Credentials
+	// // data, err := resource.CommonCredentialExtractor(ctx, cd.Source, c.kube, cd.CommonCredentialSelectors)
+	// data, err := ExtractSecret(ctx, connector.kube, cd.CommonCredentialSelectors)
+	// if err != nil {
+	// 	return managed.ExternalObservation{ResourceUpToDate: false}, errors.Wrap(err, errGetCreds)
+	// }
 
-	svc, err := connector.newServiceFn(ctx, data)
-	if err != nil {
-		return managed.ExternalObservation{ResourceUpToDate: false}, errors.Wrap(err, errNewClient)
-	}
+	// svc, err := connector.newServiceFn(ctx, data)
+	// if err != nil {
+	// 	return managed.ExternalObservation{ResourceUpToDate: false}, errors.Wrap(err, errNewClient)
+	// }
 
-	c.service = svc
+	// c.service = svc
 
 	logger.Info("Running Scripts...")
 	// anything else than delete, we just update (run the script) again
