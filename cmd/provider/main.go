@@ -95,8 +95,6 @@ func main() {
 		// logger when we're running in debug mode.
 		ctrl.SetLogger(zl)
 	}
-	// Temporarily set the logger for debugging
-	ctrl.SetLogger(zl)
 
 	log := logging.NewLogrLogger(zl.WithName("provider-remoteexec"))
 

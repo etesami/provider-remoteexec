@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/crossplane/provider-remoteexec/apis/ssh/v1alpha1"
@@ -134,7 +135,7 @@ func NewSSHClientwithMap(ctx context.Context, data map[string][]byte) (*ssh.Clie
 
 	client, err := ssh.Dial("tcp", kc.Host, config) // Replace with your remote server address and port
 	if err != nil {
-		logger.Error(err, "Failed to dial")
+		return nil, errors.New("Failed to dial: " + string(data["remote_host_ip"]))
 	}
 
 	return client, nil
@@ -193,6 +194,12 @@ func ReplaceVars(script string, vars []v1alpha1.Var) string {
 	return script
 }
 
+func isIPv4(ip string) bool {
+	ipv4Pattern := `^(([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])$`
+	match, _ := regexp.MatchString(ipv4Pattern, ip)
+	return match
+}
+
 // RunScript function execute the given script over an ssh session
 func RunScript(ctx context.Context, client *ssh.Client, script string, vars []v1alpha1.Var, sudoEnabled bool) (string, error) {
 	logger := log.FromContext(ctx).WithName("[RunScript]")
@@ -241,9 +248,10 @@ func RunScript(ctx context.Context, client *ssh.Client, script string, vars []v1
 
 	output, err := session.CombinedOutput(cmd)
 	if err != nil {
-		logger.Error(err, "Failed to run script")
 		return string(output), err
 	}
+
+	logger.Info("Script executed, output: " + string(output))
 
 	// Clean up the temporary file
 	err = cleanUpTempFile(client, remoteFile)

@@ -113,6 +113,7 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 	// data, err := resource.CommonCredentialExtractor(ctx, cd.Source, c.kube, cd.CommonCredentialSelectors)
 	data, err := ExtractSecret(ctx, c.kube, cd.CommonCredentialSelectors)
 	if err != nil {
+		logger.Info("Cannot Extract credentials")
 		return nil, errors.Wrap(err, errGetCreds)
 	}
 
@@ -140,35 +141,6 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.New(errNotCommand)
 	}
 
-	// logger.Info("Setting Credentials...")
-
-	// // We have to establish connection every time we observe
-	// // as the provider config might have changed
-	// connector, ok := c.connector.(*connector)
-
-	// if err := connector.usage.Track(ctx, mg); err != nil {
-	// 	return managed.ExternalObservation{ResourceUpToDate: false}, errors.Wrap(err, errTrackPCUsage)
-	// }
-
-	// pc := &apisv1alpha1.ProviderConfig{}
-	// if err := connector.kube.Get(ctx, types.NamespacedName{Name: cr.GetProviderConfigReference().Name}, pc); err != nil {
-	// 	return managed.ExternalObservation{ResourceUpToDate: false}, errors.Wrap(err, errGetPC)
-	// }
-
-	// cd := pc.Spec.Credentials
-	// // data, err := resource.CommonCredentialExtractor(ctx, cd.Source, c.kube, cd.CommonCredentialSelectors)
-	// data, err := ExtractSecret(ctx, connector.kube, cd.CommonCredentialSelectors)
-	// if err != nil {
-	// 	return managed.ExternalObservation{ResourceUpToDate: false}, errors.Wrap(err, errGetCreds)
-	// }
-
-	// svc, err := connector.newServiceFn(ctx, data)
-	// if err != nil {
-	// 	return managed.ExternalObservation{ResourceUpToDate: false}, errors.Wrap(err, errNewClient)
-	// }
-
-	// c.service = svc
-
 	logger.Info("Running Scripts...")
 	// anything else than delete, we just update (run the script) again
 	msg, err := sshv1alpha1.RunScript(
@@ -178,13 +150,14 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		// when there is an error in running script, we just reflect results in status
 		// and set conditions accordingly and wait for trigger to be set to true
 		// there is nothing for the external resource to be created or updated
-		logger.Error(err, "Unable to run the script")
 		cr.Status.AtProvider.Output = msg
 		var exitErr *ssh.ExitError
 		if errors.As(err, &exitErr) {
 			cr.Status.AtProvider.StatusCode = exitErr.ExitStatus()
+			logger.Info("Unable to run the script, exit code: " + string(cr.Status.AtProvider.StatusCode))
 		} else {
 			cr.Status.AtProvider.StatusCode = 1
+			logger.Info("Unable to run the script, exit code: 1")
 		}
 		cr.SetConditions(xpv1.Unavailable())
 		return managed.ExternalObservation{
