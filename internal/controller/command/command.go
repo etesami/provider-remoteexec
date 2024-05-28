@@ -147,24 +147,24 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	connector, ok := c.connector.(*connector)
 
 	if err := connector.usage.Track(ctx, mg); err != nil {
-		return managed.ExternalObservation{}, errors.Wrap(err, errTrackPCUsage)
+		return managed.ExternalObservation{ResourceUpToDate: false}, errors.Wrap(err, errTrackPCUsage)
 	}
 
 	pc := &apisv1alpha1.ProviderConfig{}
 	if err := connector.kube.Get(ctx, types.NamespacedName{Name: cr.GetProviderConfigReference().Name}, pc); err != nil {
-		return managed.ExternalObservation{}, errors.Wrap(err, errGetPC)
+		return managed.ExternalObservation{ResourceUpToDate: false}, errors.Wrap(err, errGetPC)
 	}
 
 	cd := pc.Spec.Credentials
 	// data, err := resource.CommonCredentialExtractor(ctx, cd.Source, c.kube, cd.CommonCredentialSelectors)
 	data, err := ExtractSecret(ctx, connector.kube, cd.CommonCredentialSelectors)
 	if err != nil {
-		return managed.ExternalObservation{}, errors.Wrap(err, errGetCreds)
+		return managed.ExternalObservation{ResourceUpToDate: false}, errors.Wrap(err, errGetCreds)
 	}
 
 	svc, err := connector.newServiceFn(ctx, data)
 	if err != nil {
-		return managed.ExternalObservation{}, errors.Wrap(err, errNewClient)
+		return managed.ExternalObservation{ResourceUpToDate: false}, errors.Wrap(err, errNewClient)
 	}
 
 	c.service = svc
