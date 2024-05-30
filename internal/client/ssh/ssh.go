@@ -90,6 +90,9 @@ func NewSSHClientwithMap(ctx context.Context, data map[string][]byte) (*ssh.Clie
 	if _, ok := data["remote_host_ip"]; !ok {
 		return nil, errors.New("remote_host_ip key not found in the data")
 	}
+	if ok := isValidIPv4(string(data["remote_host_ip"])); !ok {
+		return nil, errors.New("Remote host address is not a valid: " + string(data["remote_host_ip"]))
+	}
 	if _, ok := data["remote_host_port"]; !ok {
 		return nil, errors.New("remote_host_port key not found in the data")
 	}
@@ -139,6 +142,23 @@ func NewSSHClientwithMap(ctx context.Context, data map[string][]byte) (*ssh.Clie
 	}
 
 	return client, nil
+}
+
+func isValidIPv4(inputAddress string) bool {
+	// Check if the input is a valid IPv4 address
+	// Check if the input is a valid IPv4 address
+	ipv4Pattern := `^(\d{1,3}\.){3}\d{1,3}$`
+	ipv4Regex := regexp.MustCompile(ipv4Pattern)
+
+	// Regular expression pattern to match URL with anything[dot]anything
+	urlPattern := `^[^\.]+(\.[^\.]+)+$`
+	urlRegex := regexp.MustCompile(urlPattern)
+
+	// Check if the input string matches IPv4 pattern or URL pattern
+	if ipv4Regex.MatchString(inputAddress) || urlRegex.MatchString(inputAddress) {
+		return true
+	}
+	return false
 }
 
 // send a file to the remote host
@@ -192,12 +212,6 @@ func ReplaceVars(script string, vars []v1alpha1.Var) string {
 		script = strings.ReplaceAll(script, "{{"+v.Name+"}}", v.Value)
 	}
 	return script
-}
-
-func isIPv4(ip string) bool {
-	ipv4Pattern := `^(([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-5])$`
-	match, _ := regexp.MatchString(ipv4Pattern, ip)
-	return match
 }
 
 // RunScript function execute the given script over an ssh session

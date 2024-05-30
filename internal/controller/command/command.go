@@ -119,6 +119,7 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 
 	svc, err := c.newServiceFn(ctx, data)
 	if err != nil {
+		cr.SetConditions(xpv1.ReconcileError(err))
 		return nil, errors.Wrap(err, errNewClient)
 	}
 
