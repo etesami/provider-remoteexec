@@ -69,7 +69,7 @@ func NewSSHClientwithKey(ctx context.Context, data []byte) (*ssh.Client, error) 
 
 	client, err := ssh.Dial("tcp", remoteHost, config) // Replace with your remote server address and port
 	if err != nil {
-		logger.Error(err, "Failed to dial")
+		logger.Error(err, "Failed to dial: "+string(kc.Host)+" with username "+kc.Username+" error: "+err.Error())
 	}
 
 	return client, nil
@@ -136,9 +136,10 @@ func NewSSHClientwithMap(ctx context.Context, data map[string][]byte) (*ssh.Clie
 		config.HostKeyCallback = ssh.InsecureIgnoreHostKey()
 	}
 
+	logger.Info("Connecting to remote host: " + kc.Host + " with username: " + kc.Username)
 	client, err := ssh.Dial("tcp", kc.Host, config) // Replace with your remote server address and port
 	if err != nil {
-		return nil, errors.New("Failed to dial: " + string(data["remote_host_ip"]))
+		return nil, errors.New("Failed to dial: " + string(kc.Host) + " with username " + kc.Username + " error: " + err.Error())
 	}
 
 	return client, nil
